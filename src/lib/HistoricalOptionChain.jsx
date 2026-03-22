@@ -157,12 +157,16 @@ function buildOptionData(rows, symbol, date, selectedExpiry) {
   }
 }
 
+function getUrlParam(name) {
+  return new URLSearchParams(window.location.search).get(name) || ''
+}
+
 function HistoricalOptionChain() {
   const [availableDates, setAvailableDates] = useState([])
   const [availableSymbols, setAvailableSymbols] = useState([])
-  const [selectedSymbol, setSelectedSymbol] = useState(DEFAULT_SYMBOL)
-  const [selectedExpiry, setSelectedExpiry] = useState('')
-  const [selectedDate, setSelectedDate] = useState('')
+  const [selectedSymbol, setSelectedSymbol] = useState(() => getUrlParam('symbol') || DEFAULT_SYMBOL)
+  const [selectedExpiry, setSelectedExpiry] = useState(() => getUrlParam('expiry') || '')
+  const [selectedDate, setSelectedDate] = useState(() => getUrlParam('date') || '')
   const [viewMode, setViewMode] = useState('ltp')
   const [csvRows, setCsvRows] = useState([])
   const [atmStrike, setAtmStrike] = useState(0)
@@ -361,6 +365,18 @@ function HistoricalOptionChain() {
     }, 100)
     return () => clearTimeout(timer)
   }, [atmStrike])
+
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (selectedDate) params.set('date', selectedDate)
+    if (selectedSymbol) params.set('symbol', selectedSymbol)
+    if (selectedExpiry) params.set('expiry', selectedExpiry)
+    const newSearch = params.toString()
+    const currentSearch = window.location.search.replace(/^\?/, '')
+    if (newSearch !== currentSearch) {
+      window.history.replaceState(null, '', newSearch ? `?${newSearch}` : window.location.pathname)
+    }
+  }, [selectedDate, selectedSymbol, selectedExpiry])
 
   function isAtm(strike) {
     return strike === atmStrike
