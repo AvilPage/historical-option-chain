@@ -13,12 +13,33 @@ function toContentsUrl(path) {
   return `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${encodedPath}?ref=${encodeURIComponent(GITHUB_BRANCH)}`
 }
 
+function toRawCsvUrl(date, symbol) {
+  const encodedPath = `${GITHUB_BASE_PATH}/${date}/${symbol}.csv`.split('/').map(encodeURIComponent).join('/')
+  return `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/${encodeURIComponent(GITHUB_BRANCH)}/${encodedPath}`
+}
+
 async function fetchJson(url) {
   const response = await fetch(url)
   if (!response.ok) {
-    throw new Error(`GitHub API request failed (${response.status})`)
+    let message = ''
+    try {
+      const errorBody = await response.json()
+      message = errorBody?.message || ''
+    } catch {
+      // Ignore JSON parse errors on non-JSON responses.
+    }
+
+    const err = new Error(`GitHub API request failed (${response.status})${message ? `: ${message}` : ''}`)
+    err.status = response.status
+    err.isRateLimit = response.status === 403
+      && (response.headers.get('x-ratelimit-remaining') === '0' || /rate\s*limit/i.test(message))
+    throw err
   }
   return response.json()
+}
+
+function isRateLimitError(err) {
+  return Boolean(err?.isRateLimit)
 }
 
 function parseCsvLine(line) {
@@ -181,7 +202,13 @@ function HistoricalOptionChain() {
         }
       } catch (err) {
         if (!ignore) {
-          setError(err.message || 'Failed to load dates from GitHub')
+          if (isRateLimitError(err)) {
+            setAvailableDates((prev) => (prev.length ? prev : [DEFAULT_DATE]))
+            setSelectedDate((prev) => prev || DEFAULT_DATE)
+            showToast('GitHub API rate limit hit. Using fallback date list.')
+          } else {
+            setError(err.message || 'Failed to load dates from GitHub')
+          }
         }
       } finally {
         if (!ignore) {
@@ -221,9 +248,15 @@ function HistoricalOptionChain() {
         }
       } catch (err) {
         if (!ignore) {
-          setAvailableSymbols([])
-          setSelectedSymbol('')
-          setError(err.message || 'Failed to load symbols from GitHub')
+          if (isRateLimitError(err)) {
+            setAvailableSymbols((prev) => (prev.length ? prev : [selectedSymbol || DEFAULT_SYMBOL]))
+            setSelectedSymbol((prev) => prev || DEFAULT_SYMBOL)
+            showToast('GitHub API rate limit hit. Using fallback symbol list.')
+          } else {
+            setAvailableSymbols([])
+            setSelectedSymbol('')
+            setError(err.message || 'Failed to load symbols from GitHub')
+          }
         }
       } finally {
         if (!ignore) {
@@ -247,8 +280,33 @@ function HistoricalOptionChain() {
       setLoading(true)
       setError('')
       try {
-        const fileMeta = await fetchJson(toContentsUrl(`${GITHUB_BASE_PATH}/${selectedDate}/${selectedSymbol}.csv`))
-        const response = await fetch(fileMeta.download_url)
+        let csvUrl = toRawCsvUrl(selectedDate, selectedSymbol)
+        let metaError = null
+        let fileMeta = null
+
+        try {
+          fileMeta = await fetchJson(toContentsUrl(`${GITHUB_BASE_PATH}/${selectedDate}/${selectedSymbol}.csv`))
+        } catch (err) {
+          metaError = err
+        }
+
+        if (metaError) {
+          if (metaError.isRateLimit) {
+            if (!ignore) {
+              showToast('GitHub API rate limit hit. Using raw CSV endpoint.')
+            }
+          } else {
+            if (!ignore) {
+              setCsvRows([])
+              setError(metaError.message || 'Failed to load option CSV')
+            }
+            return
+          }
+        } else {
+          csvUrl = fileMeta?.download_url || csvUrl
+        }
+
+        const response = await fetch(csvUrl)
         if (!response.ok) {
           if (!ignore) {
             setCsvRows([])
