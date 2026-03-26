@@ -29,7 +29,7 @@ function HistoricalOptionChain() {
   const [selectedSymbol, setSelectedSymbol] = useState(() => getUrlParam('symbol') || DEFAULT_SYMBOL)
   const [selectedExpiry, setSelectedExpiry] = useState(() => getUrlParam('expiry') || '')
   const [selectedDate, setSelectedDate] = useState(() => getUrlParam('date') || '')
-  const [viewMode, setViewMode] = useState('ltp')
+  const viewMode = 'ltp'
   const [showPerLot, setShowPerLot] = useState(() => getUrlParam('perLot') === '1')
   const [csvRows, setCsvRows] = useState([])
   const [atmStrike, setAtmStrike] = useState(0)
@@ -447,10 +447,6 @@ function HistoricalOptionChain() {
             </div>
 
             <div className="control-strip">
-              <div className="view-toggle">
-                <button className={viewMode === 'ltp' ? 'active' : ''} onClick={() => setViewMode('ltp')}>LTP</button>
-                <button className={viewMode === 'greeks' ? 'active' : ''} onClick={() => setViewMode('greeks')}>Greeks</button>
-              </div>
 
               <button
                 type="button"
@@ -479,10 +475,10 @@ function HistoricalOptionChain() {
                 <tr className="sub-header">
                   {viewMode === 'ltp' ? (
                     <>
-                      <th>{showPerLot ? 'LTP / Lot' : 'LTP'}</th>
                       <th>Chng%</th>
                       <th>OI</th>
                       <th>IV</th>
+                      <th>{showPerLot ? 'LTP / Lot' : 'LTP'}</th>
                     </>
                   ) : (
                     <>
@@ -497,10 +493,10 @@ function HistoricalOptionChain() {
 
                   {viewMode === 'ltp' ? (
                     <>
+                      <th>{showPerLot ? 'LTP / Lot' : 'LTP'}</th>
                       <th>IV</th>
                       <th>OI</th>
                       <th>Chng%</th>
-                      <th>{showPerLot ? 'LTP / Lot' : 'LTP'}</th>
                     </>
                   ) : (
                     <>
@@ -522,7 +518,7 @@ function HistoricalOptionChain() {
                     {/* CALLS */}
                     <td className={`call-cell ${isItmStrike(row.strike, 'call', optionData.currentPrice) ? 'itm' : ''}`}>
                       {viewMode === 'ltp' ? (
-                        <span className="ltp-value">{formatPremium(row.call.ltp)}</span>
+                        <span className={getChangeClass(row.call.change)}>{row.call.change > 0 ? '+' : ''}{row.call.change.toFixed(2)}%</span>
                       ) : (
                         <span>{row.call.delta.toFixed(2)}</span>
                       )}
@@ -530,7 +526,7 @@ function HistoricalOptionChain() {
 
                     <td className={`call-cell ${isItmStrike(row.strike, 'call', optionData.currentPrice) ? 'itm' : ''}`}>
                       {viewMode === 'ltp' ? (
-                        <span className={getChangeClass(row.call.change)}>{row.call.change > 0 ? '+' : ''}{row.call.change.toFixed(2)}%</span>
+                        <span className="oi-value">{formatLargeNumber(row.call.oi)}</span>
                       ) : (
                         <span>{row.call.gamma.toFixed(3)}</span>
                       )}
@@ -538,7 +534,7 @@ function HistoricalOptionChain() {
 
                     <td className={`call-cell ${isItmStrike(row.strike, 'call', optionData.currentPrice) ? 'itm' : ''}`}>
                       {viewMode === 'ltp' ? (
-                        <span className="oi-value">{formatLargeNumber(row.call.oi)}</span>
+                        <span className="iv-value">{row.call.iv}</span>
                       ) : (
                         <span>{row.call.theta.toFixed(1)}</span>
                       )}
@@ -546,7 +542,7 @@ function HistoricalOptionChain() {
 
                     <td className={`call-cell ${isItmStrike(row.strike, 'call', optionData.currentPrice) ? 'itm' : ''}`}>
                       {viewMode === 'ltp' ? (
-                        <span className="iv-value">{row.call.iv}</span>
+                        <span className="ltp-value">{formatPremium(row.call.ltp)}</span>
                       ) : (
                         <span>{row.call.vega.toFixed(1)}</span>
                       )}
@@ -560,7 +556,7 @@ function HistoricalOptionChain() {
                     {/* PUTS */}
                     <td className={`put-cell ${isItmStrike(row.strike, 'put', optionData.currentPrice) ? 'itm' : ''}`}>
                       {viewMode === 'ltp' ? (
-                        <span className="iv-value">{row.put.iv}</span>
+                        <span className="ltp-value">{formatPremium(row.put.ltp)}</span>
                       ) : (
                         <span>{row.put.vega.toFixed(1)}</span>
                       )}
@@ -568,7 +564,7 @@ function HistoricalOptionChain() {
 
                     <td className={`put-cell ${isItmStrike(row.strike, 'put', optionData.currentPrice) ? 'itm' : ''}`}>
                       {viewMode === 'ltp' ? (
-                        <span className="oi-value">{formatLargeNumber(row.put.oi)}</span>
+                        <span className="iv-value">{row.put.iv}</span>
                       ) : (
                         <span>{row.put.theta.toFixed(1)}</span>
                       )}
@@ -576,7 +572,7 @@ function HistoricalOptionChain() {
 
                     <td className={`put-cell ${isItmStrike(row.strike, 'put', optionData.currentPrice) ? 'itm' : ''}`}>
                       {viewMode === 'ltp' ? (
-                        <span className={getChangeClass(row.put.change)}>{row.put.change > 0 ? '+' : ''}{row.put.change.toFixed(2)}%</span>
+                        <span className="oi-value">{formatLargeNumber(row.put.oi)}</span>
                       ) : (
                         <span>{row.put.gamma.toFixed(3)}</span>
                       )}
@@ -584,7 +580,7 @@ function HistoricalOptionChain() {
 
                     <td className={`put-cell ${isItmStrike(row.strike, 'put', optionData.currentPrice) ? 'itm' : ''}`}>
                       {viewMode === 'ltp' ? (
-                        <span className="ltp-value">{formatPremium(row.put.ltp)}</span>
+                        <span className={getChangeClass(row.put.change)}>{row.put.change > 0 ? '+' : ''}{row.put.change.toFixed(2)}%</span>
                       ) : (
                         <span>{row.put.delta.toFixed(2)}</span>
                       )}
