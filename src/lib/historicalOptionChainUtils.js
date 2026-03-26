@@ -45,6 +45,10 @@ export function getWeekdayDates(dates) {
 export function buildOptionData(rows, symbol, date, selectedExpiry) {
   const expiryDates = Array.from(new Set(rows.map((row) => row.XpryDt).filter(Boolean))).sort()
   const expiry = selectedExpiry && expiryDates.includes(selectedExpiry) ? selectedExpiry : (expiryDates[0] || '')
+  const lotSize = rows.reduce((currentLotSize, row) => {
+    const nextLotSize = toNumber(row.NewBrdLotQty)
+    return nextLotSize > 0 ? nextLotSize : currentLotSize
+  }, 0)
 
   const filtered = rows.filter((row) => row.XpryDt === expiry && (row.OptnTp === 'CE' || row.OptnTp === 'PE'))
   const strikeMap = new Map()
@@ -88,6 +92,7 @@ export function buildOptionData(rows, symbol, date, selectedExpiry) {
     expiry,
     expiryDates,
     lastUpdated: date,
+    lotSize,
     strikes,
   }
 }

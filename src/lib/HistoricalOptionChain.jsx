@@ -30,6 +30,7 @@ function HistoricalOptionChain() {
   const [selectedExpiry, setSelectedExpiry] = useState(() => getUrlParam('expiry') || '')
   const [selectedDate, setSelectedDate] = useState(() => getUrlParam('date') || '')
   const [viewMode, setViewMode] = useState('ltp')
+  const [showPerLot, setShowPerLot] = useState(() => getUrlParam('perLot') === '1')
   const [csvRows, setCsvRows] = useState([])
   const [atmStrike, setAtmStrike] = useState(0)
   const [toastMessage, setToastMessage] = useState('')
@@ -53,6 +54,7 @@ function HistoricalOptionChain() {
     () => buildOptionData(csvRows, selectedSymbol, selectedDate, selectedExpiry),
     [csvRows, selectedSymbol, selectedDate, selectedExpiry],
   )
+  const premiumMultiplier = showPerLot && optionData.lotSize > 0 ? optionData.lotSize : 1
 
   useEffect(() => {
     let ignore = false
@@ -241,12 +243,13 @@ function HistoricalOptionChain() {
     if (selectedDate) params.set('date', selectedDate)
     if (selectedSymbol) params.set('symbol', selectedSymbol)
     if (selectedExpiry) params.set('expiry', selectedExpiry)
+    if (showPerLot) params.set('perLot', '1')
     const newSearch = params.toString()
     const currentSearch = window.location.search.replace(/^\?/, '')
     if (newSearch !== currentSearch) {
       window.history.replaceState(null, '', newSearch ? `?${newSearch}` : window.location.pathname)
     }
-  }, [selectedDate, selectedSymbol, selectedExpiry])
+  }, [selectedDate, selectedSymbol, selectedExpiry, showPerLot])
 
   function showToast(message) {
     setToastMessage(message)
@@ -296,6 +299,10 @@ function HistoricalOptionChain() {
       event.preventDefault()
       handleSymbolSelect(filteredSymbols[highlightedSymbolIndex])
     }
+  }
+
+  function formatPremium(value) {
+    return formatNumber(value * premiumMultiplier)
   }
 
   function goToPreviousDate() {
@@ -439,9 +446,21 @@ function HistoricalOptionChain() {
               </div>
             </div>
 
-            <div className="view-toggle">
-              <button className={viewMode === 'ltp' ? 'active' : ''} onClick={() => setViewMode('ltp')}>LTP</button>
-              <button className={viewMode === 'greeks' ? 'active' : ''} onClick={() => setViewMode('greeks')}>Greeks</button>
+            <div className="control-strip">
+              <div className="view-toggle">
+                <button className={viewMode === 'ltp' ? 'active' : ''} onClick={() => setViewMode('ltp')}>LTP</button>
+                <button className={viewMode === 'greeks' ? 'active' : ''} onClick={() => setViewMode('greeks')}>Greeks</button>
+              </div>
+
+              <button
+                type="button"
+                className={`per-lot-toggle ${showPerLot ? 'active' : ''}`}
+                onClick={() => setShowPerLot((prev) => !prev)}
+                title={optionData.lotSize > 0 ? `Multiply premium values by lot size (${optionData.lotSize})` : 'Multiply premium values by lot size'}
+                aria-pressed={showPerLot}
+              >
+                Per lot{optionData.lotSize > 0 ? ` × ${optionData.lotSize}` : ''}
+              </button>
             </div>
           </div>
 
@@ -460,7 +479,7 @@ function HistoricalOptionChain() {
                 <tr className="sub-header">
                   {viewMode === 'ltp' ? (
                     <>
-                      <th>LTP</th>
+                      <th>{showPerLot ? 'LTP / Lot' : 'LTP'}</th>
                       <th>Chng%</th>
                       <th>OI</th>
                       <th>IV</th>
@@ -481,7 +500,7 @@ function HistoricalOptionChain() {
                       <th>IV</th>
                       <th>OI</th>
                       <th>Chng%</th>
-                      <th>LTP</th>
+                      <th>{showPerLot ? 'LTP / Lot' : 'LTP'}</th>
                     </>
                   ) : (
                     <>
@@ -503,7 +522,7 @@ function HistoricalOptionChain() {
                     {/* CALLS */}
                     <td className={`call-cell ${isItmStrike(row.strike, 'call', optionData.currentPrice) ? 'itm' : ''}`}>
                       {viewMode === 'ltp' ? (
-                        <span className="ltp-value">{formatNumber(row.call.ltp)}</span>
+                        <span className="ltp-value">{formatPremium(row.call.ltp)}</span>
                       ) : (
                         <span>{row.call.delta.toFixed(2)}</span>
                       )}
@@ -565,7 +584,7 @@ function HistoricalOptionChain() {
 
                     <td className={`put-cell ${isItmStrike(row.strike, 'put', optionData.currentPrice) ? 'itm' : ''}`}>
                       {viewMode === 'ltp' ? (
-                        <span className="ltp-value">{formatNumber(row.put.ltp)}</span>
+                        <span className="ltp-value">{formatPremium(row.put.ltp)}</span>
                       ) : (
                         <span>{row.put.delta.toFixed(2)}</span>
                       )}
@@ -577,7 +596,10 @@ function HistoricalOptionChain() {
           </div>
 
           <div className="footer">
-            <span>Last Updated: {optionData.lastUpdated || '-'}</span>
+            <span>
+              Last Updated: {optionData.lastUpdated || '-'}
+              {showPerLot && optionData.lotSize > 0 ? ` • Premiums shown per lot (${optionData.lotSize})` : ''}
+            </span>
           </div>
 
           {showToastFlag && (
