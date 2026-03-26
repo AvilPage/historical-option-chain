@@ -297,29 +297,32 @@
 }
 
 .calls-header {
-  background: linear-gradient(135deg, #22c55e, #16a34a);
-  color: white;
+  background: #edf7f1;
+  color: #1f5132;
   padding: 0.6rem;
   text-align: center;
   font-weight: 700;
   font-size: 0.8rem;
+  border-bottom: 1px solid #d9eadf;
 }
 
 .puts-header {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
-  color: white;
+  background: #fbefef;
+  color: #6b2d2d;
   padding: 0.6rem;
   text-align: center;
   font-weight: 700;
   font-size: 0.8rem;
+  border-bottom: 1px solid #f0dada;
 }
 
 .strike-header {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
+  background: #eef2f7;
+  color: #344054;
   padding: 0.6rem;
   font-weight: 700;
   font-size: 0.8rem;
+  border-bottom: 1px solid #dde4ee;
 }
 
 .sub-header th {
@@ -332,7 +335,7 @@
 }
 
 .strike-col {
-  background: #f0f0f0 !important;
+  background: #f4f6f8 !important;
 }
 
 .option-table tbody tr {
@@ -359,28 +362,28 @@
 }
 
 .call-cell {
-  background: #f0fdf4;
+  background: #f7fbf8;
 }
 
 .call-cell.itm {
-  background: #dcfce7;
+  background: #edf7f1;
   font-weight: 600;
 }
 
 .put-cell {
-  background: #fef2f2;
+  background: #fdf7f7;
 }
 
 .put-cell.itm {
-  background: #fee2e2;
+  background: #fbefef;
   font-weight: 600;
 }
 
 .strike-cell {
-  background: #f5f5f5;
+  background: #f4f6f8;
   font-weight: 700;
   font-size: 0.9rem;
-  color: #333;
+  color: #344054;
 }
 
 .strike-cell.atm {
