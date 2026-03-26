@@ -23,6 +23,9 @@ import './HistoricalOptionChain.css'
 function HistoricalOptionChain() {
   const [availableDates, setAvailableDates] = useState([])
   const [availableSymbols, setAvailableSymbols] = useState([])
+  const [symbolSearchQuery, setSymbolSearchQuery] = useState('')
+  const [showSymbolSearch, setShowSymbolSearch] = useState(false)
+  const [highlightedSymbolIndex, setHighlightedSymbolIndex] = useState(0)
   const [selectedSymbol, setSelectedSymbol] = useState(() => getUrlParam('symbol') || DEFAULT_SYMBOL)
   const [selectedExpiry, setSelectedExpiry] = useState(() => getUrlParam('expiry') || '')
   const [selectedDate, setSelectedDate] = useState(() => getUrlParam('date') || '')
@@ -34,8 +37,17 @@ function HistoricalOptionChain() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const atmRowRef = useRef(null)
+  const symbolSelectorRef = useRef(null)
+  const symbolSearchInputRef = useRef(null)
+  const highlightedSymbolRef = useRef(null)
 
   const weekdayDates = useMemo(() => getWeekdayDates(availableDates), [availableDates])
+  const filteredSymbols = useMemo(() => {
+    const query = symbolSearchQuery.trim().toLowerCase()
+    if (!query) return availableSymbols
+
+    return availableSymbols.filter((symbol) => symbol.toLowerCase().includes(query))
+  }, [availableSymbols, symbolSearchQuery])
 
   const optionData = useMemo(
     () => buildOptionData(csvRows, selectedSymbol, selectedDate, selectedExpiry),
@@ -94,6 +106,8 @@ function HistoricalOptionChain() {
 
         if (!ignore) {
           setAvailableSymbols(symbols)
+          setShowSymbolSearch(false)
+          setSymbolSearchQuery('')
           setSelectedSymbol((prev) => {
             if (prev && symbols.includes(prev)) return prev
             if (symbols.includes(DEFAULT_SYMBOL)) return DEFAULT_SYMBOL
@@ -104,10 +118,14 @@ function HistoricalOptionChain() {
         if (!ignore) {
           if (isRateLimitError(err)) {
             setAvailableSymbols((prev) => (prev.length ? prev : [selectedSymbol || DEFAULT_SYMBOL]))
+            setShowSymbolSearch(false)
+            setSymbolSearchQuery('')
             setSelectedSymbol((prev) => prev || DEFAULT_SYMBOL)
             showToast('GitHub API rate limit hit. Using fallback symbol list.')
           } else {
             setAvailableSymbols([])
+            setShowSymbolSearch(false)
+            setSymbolSearchQuery('')
             setSelectedSymbol('')
             setError(err.message || 'Failed to load symbols from GitHub')
           }
@@ -185,6 +203,40 @@ function HistoricalOptionChain() {
   }, [atmStrike])
 
   useEffect(() => {
+    if (!showSymbolSearch) return undefined
+
+    function handlePointerDown(event) {
+      if (!symbolSelectorRef.current?.contains(event.target)) {
+        setShowSymbolSearch(false)
+        setSymbolSearchQuery('')
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [showSymbolSearch])
+
+  useEffect(() => {
+    if (showSymbolSearch) {
+      symbolSearchInputRef.current?.focus()
+      symbolSearchInputRef.current?.select()
+    }
+  }, [showSymbolSearch])
+
+  useEffect(() => {
+    if (!showSymbolSearch) return
+
+    const selectedIndex = filteredSymbols.indexOf(selectedSymbol)
+    setHighlightedSymbolIndex(selectedIndex >= 0 ? selectedIndex : 0)
+  }, [showSymbolSearch, filteredSymbols, selectedSymbol])
+
+  useEffect(() => {
+    if (showSymbolSearch) {
+      highlightedSymbolRef.current?.scrollIntoView({ block: 'nearest' })
+    }
+  }, [highlightedSymbolIndex, showSymbolSearch])
+
+  useEffect(() => {
     const params = new URLSearchParams()
     if (selectedDate) params.set('date', selectedDate)
     if (selectedSymbol) params.set('symbol', selectedSymbol)
@@ -202,6 +254,48 @@ function HistoricalOptionChain() {
     setTimeout(() => {
       setShowToastFlag(false)
     }, 3000)
+  }
+
+  function closeSymbolSearch() {
+    setShowSymbolSearch(false)
+    setSymbolSearchQuery('')
+    setHighlightedSymbolIndex(0)
+  }
+
+  function openSymbolSearch() {
+    setShowSymbolSearch(true)
+  }
+
+  function handleSymbolSelect(symbol) {
+    setSelectedSymbol(symbol)
+    closeSymbolSearch()
+  }
+
+  function handleSymbolSearchKeyDown(event) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeSymbolSearch()
+      return
+    }
+
+    if (!filteredSymbols.length) return
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      setHighlightedSymbolIndex((prev) => Math.min(prev + 1, filteredSymbols.length - 1))
+      return
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      setHighlightedSymbolIndex((prev) => Math.max(prev - 1, 0))
+      return
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      handleSymbolSelect(filteredSymbols[highlightedSymbolIndex])
+    }
   }
 
   function goToPreviousDate() {
@@ -260,11 +354,64 @@ function HistoricalOptionChain() {
           <div className="header">
             <div className="symbol-info">
               <div className="symbol-selector">
-                <select value={selectedSymbol} onChange={(e) => setSelectedSymbol(e.target.value)}>
-                  {availableSymbols.map((symbol) => (
-                    <option key={symbol} value={symbol}>{symbol}</option>
-                  ))}
-                </select>
+                <div className="symbol-search-group" ref={symbolSelectorRef}>
+                  <button
+                    type="button"
+                    className={`symbol-trigger ${showSymbolSearch ? 'active' : ''}`}
+                    onClick={() => {
+                      if (showSymbolSearch) {
+                        closeSymbolSearch()
+                      } else {
+                        openSymbolSearch()
+                      }
+                    }}
+                    aria-haspopup="listbox"
+                    aria-expanded={showSymbolSearch}
+                  >
+                    <span>{selectedSymbol || 'Select symbol'}</span>
+                    <span className="symbol-trigger-icon">▾</span>
+                  </button>
+
+                  {showSymbolSearch && (
+                    <div className="symbol-search-popover">
+                      <input
+                        ref={symbolSearchInputRef}
+                        type="search"
+                        className="symbol-search-input"
+                        value={symbolSearchQuery}
+                        onChange={(e) => setSymbolSearchQuery(e.target.value)}
+                        onKeyDown={handleSymbolSearchKeyDown}
+                        placeholder="Search symbol"
+                        aria-label="Search symbols"
+                      />
+                      <div className="symbol-options" role="listbox" aria-label="Available symbols">
+                        {!filteredSymbols.length && (
+                          <div className="symbol-empty-state">No matching symbols</div>
+                        )}
+                        {filteredSymbols.map((symbol, index) => {
+                          const isSelected = selectedSymbol === symbol
+                          const isHighlighted = highlightedSymbolIndex === index
+
+                          return (
+                            <button
+                              key={symbol}
+                              ref={isHighlighted ? highlightedSymbolRef : null}
+                              type="button"
+                              role="option"
+                              aria-selected={isSelected}
+                              className={`symbol-option ${isSelected ? 'selected' : ''} ${isHighlighted ? 'highlighted' : ''}`.trim()}
+                              onMouseEnter={() => setHighlightedSymbolIndex(index)}
+                              onClick={() => handleSymbolSelect(symbol)}
+                            >
+                              <span>{symbol}</span>
+                              {isSelected && <span className="symbol-option-check">✓</span>}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <div className="current-price">
                   <span className="price">{formatNumber(optionData.currentPrice)}</span>
                   <span className={`change ${getChangeClass(optionData.changePercent)}`}>
