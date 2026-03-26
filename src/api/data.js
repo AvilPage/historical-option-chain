@@ -7,6 +7,8 @@ export const DEFAULT_DATE = import.meta.env.VITE_DEFAULT_DATE || '2025-01-01'
 export const DEFAULT_SYMBOL = import.meta.env.VITE_DEFAULT_SYMBOL || 'NIFTY'
 
 const CACHE_NAME = 'option-chain-v1'
+const AVAILABLE_DATES_CACHE_TTL_MS = 5 * 60 * 1000
+const CACHE_TIMESTAMP_PREFIX = `${CACHE_NAME}:timestamp:`
 
 function toContentsUrl(path) {
   const encodedPath = path.split('/').map(encodeURIComponent).join('/')
@@ -18,14 +20,60 @@ function toRawCsvUrl(date, symbol) {
   return `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/${encodeURIComponent(GITHUB_BRANCH)}/${encodedPath}`
 }
 
-async function cachedFetch(url) {
+function getCacheTimestampKey(url) {
+  return `${CACHE_TIMESTAMP_PREFIX}${url}`
+}
+
+function getCachedAt(url) {
+  try {
+    const value = window.localStorage.getItem(getCacheTimestampKey(url))
+    return value ? Number(value) : null
+  } catch {
+    return null
+  }
+}
+
+function setCachedAt(url, timestamp) {
+  try {
+    window.localStorage.setItem(getCacheTimestampKey(url), String(timestamp))
+  } catch {
+    // Ignore storage write failures.
+  }
+}
+
+function clearCachedAt(url) {
+  try {
+    window.localStorage.removeItem(getCacheTimestampKey(url))
+  } catch {
+    // Ignore storage delete failures.
+  }
+}
+
+async function cachedFetch(url, { ttlMs } = {}) {
   if ('caches' in window) {
     const cache = await caches.open(CACHE_NAME)
     const cached = await cache.match(url)
-    if (cached) return cached
+
+    if (cached) {
+      if (!ttlMs) return cached
+
+      const cachedAt = getCachedAt(url)
+      if (cachedAt && Date.now() - cachedAt < ttlMs) {
+        return cached
+      }
+
+      await cache.delete(url)
+      clearCachedAt(url)
+    }
 
     const fresh = await fetch(url)
-    if (fresh.ok) cache.put(url, fresh.clone())
+    if (fresh.ok) {
+      cache.put(url, fresh.clone())
+      if (ttlMs) setCachedAt(url, Date.now())
+    } else if (ttlMs) {
+      clearCachedAt(url)
+    }
+
     return fresh
   }
 
@@ -106,7 +154,28 @@ export function isRateLimitError(err) {
 }
 
 export async function fetchAvailableDates() {
-  const items = await fetchJson(toContentsUrl(GITHUB_BASE_PATH))
+  const response = await cachedFetch(toContentsUrl(GITHUB_BASE_PATH), {
+    ttlMs: AVAILABLE_DATES_CACHE_TTL_MS,
+  })
+
+  if (!response.ok) {
+    let message = ''
+
+    try {
+      const errorBody = await response.json()
+      message = errorBody?.message || ''
+    } catch {
+      // Ignore JSON parse errors on non-JSON responses.
+    }
+
+    const err = new Error(`GitHub API request failed (${response.status})${message ? `: ${message}` : ''}`)
+    err.status = response.status
+    err.isRateLimit = response.status === 403
+      && (response.headers.get('x-ratelimit-remaining') === '0' || /rate\s*limit/i.test(message))
+    throw err
+  }
+
+  const items = await response.json()
 
   return items
     .filter((item) => item.type === 'dir' && /^\d{4}-\d{2}-\d{2}$/.test(item.name))
