@@ -1,11 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import {
-  DEFAULT_DATE,
   DEFAULT_SYMBOL,
   fetchAvailableDates,
   fetchAvailableSymbols,
   fetchOptionCsvRows,
-  isRateLimitError,
 } from '../api/data.js'
 import {
   buildOptionData,
@@ -74,13 +72,7 @@ function HistoricalOptionChain() {
         }
       } catch (err) {
         if (!ignore) {
-          if (isRateLimitError(err)) {
-            setAvailableDates((prev) => (prev.length ? prev : [DEFAULT_DATE]))
-            setSelectedDate((prev) => prev || DEFAULT_DATE)
-            showToast('GitHub API rate limit hit. Using fallback date list.')
-          } else {
-            setError(err.message || 'Failed to load dates from GitHub')
-          }
+          setError(err.message || 'Failed to load dates from GitHub')
         }
       } finally {
         if (!ignore) {
@@ -118,19 +110,11 @@ function HistoricalOptionChain() {
         }
       } catch (err) {
         if (!ignore) {
-          if (isRateLimitError(err)) {
-            setAvailableSymbols((prev) => (prev.length ? prev : [selectedSymbol || DEFAULT_SYMBOL]))
-            setShowSymbolSearch(false)
-            setSymbolSearchQuery('')
-            setSelectedSymbol((prev) => prev || DEFAULT_SYMBOL)
-            showToast('GitHub API rate limit hit. Using fallback symbol list.')
-          } else {
-            setAvailableSymbols([])
-            setShowSymbolSearch(false)
-            setSymbolSearchQuery('')
-            setSelectedSymbol('')
-            setError(err.message || 'Failed to load symbols from GitHub')
-          }
+          setAvailableSymbols([])
+          setShowSymbolSearch(false)
+          setSymbolSearchQuery('')
+          setSelectedSymbol('')
+          setError(err.message || 'Failed to load symbols from GitHub')
         }
       } finally {
         if (!ignore) {

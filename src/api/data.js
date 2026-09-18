@@ -3,11 +3,10 @@ const GITHUB_REPO = import.meta.env.VITE_GITHUB_REPO || 'historical-option-chain
 const GITHUB_BRANCH = import.meta.env.VITE_GITHUB_BRANCH || 'master'
 const GITHUB_BASE_PATH = import.meta.env.VITE_GITHUB_FO_PATH || 'data/fo'
 
-export const DEFAULT_DATE = import.meta.env.VITE_DEFAULT_DATE || '2025-01-01'
 export const DEFAULT_SYMBOL = import.meta.env.VITE_DEFAULT_SYMBOL || 'NIFTY'
 
 const CACHE_NAME = 'option-chain-v1'
-const AVAILABLE_DATES_CACHE_TTL_MS = 5 * 60 * 1000
+const MANIFEST_CACHE_TTL_MS = 24 * 60 * 60 * 1000
 const CACHE_TIMESTAMP_PREFIX = `${CACHE_NAME}:timestamp:`
 
 function toContentsUrl(path) {
@@ -17,6 +16,11 @@ function toContentsUrl(path) {
 
 function toRawCsvUrl(date, symbol) {
   const encodedPath = `${GITHUB_BASE_PATH}/${date}/${symbol}.csv`.split('/').map(encodeURIComponent).join('/')
+  return `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/${encodeURIComponent(GITHUB_BRANCH)}/${encodedPath}`
+}
+
+function toManifestUrl() {
+  const encodedPath = `${GITHUB_BASE_PATH}/manifest.json`.split('/').map(encodeURIComponent).join('/')
   return `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/${encodeURIComponent(GITHUB_BRANCH)}/${encodedPath}`
 }
 
@@ -153,43 +157,26 @@ export function isRateLimitError(err) {
   return Boolean(err?.isRateLimit)
 }
 
-export async function fetchAvailableDates() {
-  const response = await cachedFetch(toContentsUrl(GITHUB_BASE_PATH), {
-    ttlMs: AVAILABLE_DATES_CACHE_TTL_MS,
+async function fetchManifest() {
+  const response = await cachedFetch(toManifestUrl(), {
+    ttlMs: MANIFEST_CACHE_TTL_MS,
   })
 
   if (!response.ok) {
-    let message = ''
-
-    try {
-      const errorBody = await response.json()
-      message = errorBody?.message || ''
-    } catch {
-      // Ignore JSON parse errors on non-JSON responses.
-    }
-
-    const err = new Error(`GitHub API request failed (${response.status})${message ? `: ${message}` : ''}`)
-    err.status = response.status
-    err.isRateLimit = response.status === 403
-      && (response.headers.get('x-ratelimit-remaining') === '0' || /rate\s*limit/i.test(message))
-    throw err
+    throw new Error(`Manifest request failed (${response.status})`)
   }
 
-  const items = await response.json()
+  return response.json()
+}
 
-  return items
-    .filter((item) => item.type === 'dir' && /^\d{4}-\d{2}-\d{2}$/.test(item.name))
-    .map((item) => item.name)
-    .sort()
+export async function fetchAvailableDates() {
+  const manifest = await fetchManifest()
+  return manifest.dates || []
 }
 
 export async function fetchAvailableSymbols(date) {
-  const items = await fetchJson(toContentsUrl(`${GITHUB_BASE_PATH}/${date}`))
-
-  return items
-    .filter((item) => item.type === 'file' && item.name.endsWith('.csv'))
-    .map((item) => item.name.replace(/\.csv$/i, ''))
-    .sort()
+  const manifest = await fetchManifest()
+  return manifest.symbols?.[date] || []
 }
 
 export async function fetchOptionCsvRows(date, symbol) {
